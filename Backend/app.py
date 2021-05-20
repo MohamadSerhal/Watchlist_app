@@ -10,21 +10,10 @@ import enum
 
 app = Flask(__name__)    # created a flask app
 ma = Marshmallow(app)   # used for data serialization
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:********@localhost:3306/watchlist'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:<password>@localhost:3306/watchlist'
 CORS(app)
 db = SQLAlchemy(app)
 
-
-## Status enums for both anime and manga
-class animeStatus(enum.Enum):
-    WATCHED = "Watched"
-    TO_WATCH = "To watch"
-    WATCHING = "Watching"
-
-class mangaStatus(enum.Enum):
-    READ = "Read"
-    TO_READ = "To read"
-    READING = "Reading"
 
 
 ## Table models in the database
@@ -33,7 +22,7 @@ class Anime(db.Model):
     name = db.Column(db.String(50), unique=True)
     description = db.Column(db.Text, nullable=True)
     imgPath = db.Column(db.Text, nullable=True)
-    status = db.Column(db.Enum(animeStatus))
+    status = db.Column(db.String(20))
     altPic = db.Column(db.String(50))
 
     def __init__(self, name, description, imgPath, status, altP):
@@ -49,7 +38,7 @@ class Manga(db.Model):
     name = db.Column(db.String(50), unique=True)
     description = db.Column(db.Text, nullable=True)
     imgPath = db.Column(db.Text, nullable=True)
-    status = db.Column(db.Enum(mangaStatus))
+    status = db.Column(db.String(20))
     altPic = db.Column(db.String(50))
 
     def __init__(self, name, description, imgPath, status, altP):
@@ -65,6 +54,7 @@ class AnimeSchema(ma.Schema):
     class Meta:
         fields = ("id", "name", "description", "imgPath", "status", "altPic")
         model = Anime
+        
 
 anime_schema = AnimeSchema()
 animes_schema = AnimeSchema(many=True)
@@ -90,34 +80,34 @@ mangas_schema = MangaSchema(many=True)
 # Fetching Animes from database
 @app.route('/anime/watched', methods=['GET'])
 def getWatchedAnimes():
-    watchedAnimes = Anime.query.filter_by(status= animeStatus.WATCHED).all()
+    watchedAnimes = Anime.query.filter_by(status= "watched").all()
     return jsonify(animes_schema.dump(watchedAnimes))
 
 @app.route('/anime/toWatch', methods=['GET'])
 def getToWatchAnimes():
-    toWatchedAnimes = Anime.query.filter_by(status= animeStatus.TO_WATCH).all()
+    toWatchedAnimes = Anime.query.filter_by(status= "to watch").all()
     return jsonify(animes_schema.dump(toWatchedAnimes))
 
 @app.route('/anime/watching', methods=['GET'])
 def getWatchingAnimes():
-    watchingAnimes = Anime.query.filter_by(status= animeStatus.WATCHING).all()
+    watchingAnimes = Anime.query.filter_by(status= "watching").all()
     return jsonify(animes_schema.dump(watchingAnimes))
 
 
 # Fetching mangas from database
 @app.route('/manga/read', methods=['GET'])
 def getReadMangas():
-    readManga = Manga.query.filter_by(status= mangaStatus.READ).all()
+    readManga = Manga.query.filter_by(status= "read").all()
     return jsonify(mangas_schema.dump(readManga))
 
 @app.route('/manga/toRead', methods=['GET'])
 def getToReadMangas():
-    toReadManga = Manga.query.filter_by(status= mangaStatus.TO_READ).all()
+    toReadManga = Manga.query.filter_by(status= "to read").all()
     return jsonify(mangas_schema.dump(toReadManga))
 
 @app.route('/manga/reading', methods=['GET'])
 def getReadingMangas():
-    readingManga = Manga.query.filter_by(status= mangaStatus.READING).all()
+    readingManga = Manga.query.filter_by(status= "reading").all()
     return jsonify(mangas_schema.dump(readingManga))
 
 
@@ -125,11 +115,14 @@ def getReadingMangas():
 @app.route('/anime/add', methods=['POST'])
 def addAnime():
     name = request.json["name"]
+    anime = Anime.query.filter_by(name= name).first()
+    if anime is not None:
+        abort(400, {"message": "Can't add to database, anime of this name already exists!"})
     description = request.json["description"]
     imgPath = request.json["path"]
     status = request.json["status"]
     altPic = request.json["altPic"]
-    anime = Anime(name=name, description= description, imgPath= imgPath, status= status, altPic=altPic)
+    anime = Anime(name=name, description= description, imgPath= imgPath, status= status, altP=altPic)
     db.session.add(anime)
     db.session.commit()
     return jsonify(anime_schema.dump(anime))
@@ -139,17 +132,20 @@ def addAnime():
 @app.route('/manga/add', methods=['POST'])
 def addManga():
     name = request.json["name"]
+    mn = Manga.query.filter_by(name= name).first()
+    if mn is not None:
+        abort(400, {"message": "Can't add to database, manga of this name already exists!"})
     description = request.json["description"]
     imgPath = request.json["path"]
     status = request.json["status"]
     altPic = request.json["altPic"]
-    manga = Manga(name=name, description= description, imgPath= imgPath, status= status, altPic= altPic)
+    manga = Manga(name=name, description= description, imgPath= imgPath, status= status, altP= altPic)
     db.session.add(manga)
     db.session.commit()
     return jsonify(manga_schema.dump(manga))
 
 
-# Edit anime 
+# Edit anime (NOT used)
 @app.route('/anime/edit/<id>', methods=['PATCH'])
 def edit_anime(id):
     anime = Anime.query.filter_by(id= id).first()
@@ -166,8 +162,9 @@ def edit_anime(id):
     anime.status = newStatus
     anime.altPic = newAlt
     db.session.commit()
+    return "anime edited"
 
-# Edit manga
+# Edit manga  (NOT used)
 @app.route('/manga/edit/<id>', methods=['PATCH'])
 def edit_manga(id):
     manga = Manga.query.filter_by(id= id).first()
@@ -184,6 +181,7 @@ def edit_manga(id):
     manga.status = newStatus
     manga.altPic = newAlt
     db.session.commit()
+    return "edited manga"
 
 
 # Delete anime
@@ -216,6 +214,7 @@ def edit_anime_status(id):
     newStatus = request.json["status"]
     anime.status = newStatus
     db.session.commit()
+    return "Changed status successfully"
 
 # update manga status
 @app.route("/manga/status/<id>", methods=["PATCH"])
@@ -226,8 +225,9 @@ def edit_manga_status(id):
     newStatus = request.json["status"]
     manga.status = newStatus
     db.session.commit()
+    return "Changed status successfully"
 
-# open anime details page
+# open anime details page  (NOT used)
 @app.route("/anime/details/<id>", methods=["GET"])
 def anime_get(id):
     anime = Anime.query.filter_by(id= id).first()
@@ -236,7 +236,7 @@ def anime_get(id):
     return jsonify(anime_schema(anime))
 
 
-# open manga details page
+# open manga details page (NOT used)
 @app.route("/manga/details/<id>", methods=["GET"])
 def manga_get(id):
     manga = Manga.query.filter_by(id= id).first()
